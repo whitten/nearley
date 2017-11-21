@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 
-var rr = require('railroad-diagrams');
+try {
+  var rr = require('railroad-diagrams');
+} catch(e) {
+  // optional dependency not fullfilled
+  console.log('Error: When you installed nearley, the dependency "railroad-diagrams" failed to install. Try running "npm install -g nearley" to re-install nearley. If that doesn\'t fix the problem, please file an issue on the nearley GitHub repository.')
+  process.exit(1)
+}
+
 var fs = require('fs');
 var path = require('path');
 var nomnom = require('nomnom');
-
 
 var opts = nomnom
     .script('nearley-railroad')
@@ -38,21 +44,22 @@ function railroad(grm) {
             rules[instr.name] = rules[instr.name].concat(instr.rules);
         }
     });
-    
-    ret = '<style type="text/css">\n';
-    ret += fs.readFileSync(
+
+    var style = fs.readFileSync(
         path.join(
             path.dirname(require.resolve('railroad-diagrams')),
             'railroad-diagrams.css'
         )
-    ).toString();
-    ret += '\n</style>';
+    );
 
-    Object.keys(rules).forEach(function(r) {
-        ret += '\n<br/><h1><code>'+ r +'</code></h1><br/>' + (diagram(r).toString());
+    var diagrams = Object.keys(rules).map(function(r) {
+        return [
+          '<h1><code>' + r + '</code></h1>',
+          '<div>',
+            diagram(r).toString(),
+          '</div>'
+        ].join('\n');
     });
-
-
 
     function diagram(name) {
         var selectedrules = rules[name];
@@ -93,7 +100,21 @@ function railroad(grm) {
 
         return new rr.Diagram([renderTok(outer)]);
     }
-    return ret;
+
+    return [
+      '<!DOCTYPE html>',
+      '<html>',
+        '<head>',
+          '<meta charset="UTF-8">',
+          '<style type="text/css">',
+            style.toString(),
+          '</style>',
+        '</head>',
+        '<body>',
+          diagrams.join('\n'),
+        '</body>',
+      '</html>'
+    ].join('\n');
 }
 
 var nearley = require('../lib/nearley.js');
@@ -103,5 +124,9 @@ var parser = new nearley.Parser(parserGrammar.ParserRules, parserGrammar.ParserS
 input
     .pipe(new StreamWrapper(parser))
     .on('finish', function() {
-        output.write(railroad(parser.results[0]));
+        if (parser.results[0]) {
+            output.write(railroad(parser.results[0]));
+        } else {
+            process.stderr.write('SyntaxError: unexpected EOF\n');
+        }
     });

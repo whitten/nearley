@@ -19,6 +19,7 @@ var opts = nomnom
     .option('input', {
         abbr: 'i',
         help: "An input string to parse (if not provided then read from stdin)",
+        type: 'string',
     })
     .option('start', {
         abbr: 's',
@@ -27,6 +28,11 @@ var opts = nomnom
     .option('out', {
         abbr: 'o',
         help: "File to output to (defaults to stdout)",
+    })
+    .option('quiet', {
+        abbr: 'q',
+        flag: true,
+        help: "Output parse results only (hide Earley table)",
     })
     .option('version', {
         abbr: 'v',
@@ -40,25 +46,29 @@ var opts = nomnom
 
 var output = opts.out ? fs.createWriteStream(opts.out) : process.stdout;
 
-var grammar = new require(require('path').resolve(opts.file));
-var parser = new nearley.Parser(grammar.ParserRules, opts.start ? opts.start : grammar.ParserStart);
+var filename = require('path').resolve(opts.file);
+var grammar = nearley.Grammar.fromCompiled(require(filename));
+if (opts.start) grammar.start = opts.start
+var parser = new nearley.Parser(grammar, {
+    keepHistory: true,
+});
 
 var writeTable = function (writeStream, parser) {
     writeStream.write("Table length: " + parser.table.length + "\n");
     writeStream.write("Number of parses: " + parser.results.length + "\n");
     writeStream.write("Parse Charts");
-    var chartNumber = 0;
-    parser.table.forEach(
-        function (chart) {
-            writeStream.write("\nChart: " + chartNumber++ + "\n");
-            var stateNumber = 0;
-            chart.forEach(
-                function (state) {
-                    writeStream.write(stateNumber++ + ": " + state.toString() + "\n");
-                } )
-        } )
+    parser.table.forEach(function (column, index) {
+        writeStream.write("\nChart: " + index++ + "\n");
+        var stateNumber = 0;
+        column.states.forEach(function (state, stateIndex) {
+            writeStream.write(stateIndex + ": " + state.toString() + "\n");
+        })
+    })
     writeStream.write("\n\nParse results: \n");
-    writeStream.write(require('util').inspect(parser.results, {colors: true, depth: null}));
+}
+
+var writeResults = function (writeStream, parser) {
+    writeStream.write(require('util').inspect(parser.results, {colors: !opts.quiet, depth: null}));
     writeStream.write("\n");
 }
 
@@ -66,9 +76,12 @@ if (typeof(opts.input) === "undefined") {
     process.stdin
         .pipe(new StreamWrapper(parser))
         .on('finish', function() {
-            writeTable(output, parser);
+            if (!opts.quiet) writeTable(output, parser);
+            writeResults(output, parser);
         });
 } else {
     parser.feed(opts.input);
-    writeTable(output, parser);
+    if (!opts.quiet) writeTable(output, parser);
+    writeResults(output, parser);
 }
+

@@ -1,4 +1,4 @@
-posint -> [0-9]:+ {%
+unsigned_int -> [0-9]:+ {%
     function(d) {
         return parseInt(d[0].join(""));
     }
@@ -14,6 +14,14 @@ int -> ("-"|"+"):? [0-9]:+ {%
     }
 %}
 
+unsigned_decimal -> [0-9]:+ ("." [0-9]:+):? {%
+    function(d) {
+        return parseFloat(
+            d[0].join("") +
+            (d[1] ? "."+d[1][1].join("") : "")
+        );
+    }
+%}
 
 decimal -> "-":? [0-9]:+ ("." [0-9]:+):? {%
     function(d) {
@@ -36,7 +44,7 @@ jsonfloat -> "-":? [0-9]:+ ("." [0-9]:+):? ([eE] [+-]:? [0-9]:+):? {%
         return parseFloat(
             (d[0] || "") +
             d[1].join("") +
-            (d[2] ? d[2][1].join("") : "") +
+            (d[2] ? "."+d[2][1].join("") : "") +
             (d[3] ? "e" + (d[3][1] || "+") + d[3][2].join("") : "")
         );
     }
